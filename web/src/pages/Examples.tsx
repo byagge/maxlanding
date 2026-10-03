@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, money, type Template } from "../api";
+import { api, type Template } from "../api";
 
 export function ExamplesPage() {
   const [page, setPage] = useState(1);
@@ -21,7 +21,7 @@ export function ExamplesPage() {
         {items.map((item) => (
           <article key={item.id} className="shop-card">
             <div className="preview"><iframe title={item.name} src={`/t/${item.slug}`} /></div>
-            <div className="row"><b>{item.name}</b><span className="badge">{item.price > 0 ? money(item.price) : "бесплатно"}</span></div>
+            <div className="row"><b>{item.name}</b><span className="badge">{item.category}</span></div>
             <p className="muted">{item.description}</p>
           </article>
         ))}

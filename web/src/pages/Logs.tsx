@@ -25,7 +25,7 @@ export function LogsPage({ user, onUser }: { user: User; onUser: (user: User) =>
   return (
     <section className="page">
       <h1>Настройки логов</h1>
-      <div className="notice">Подробные фильтры, выгрузки и гео доделаем следующим этапом. Уже пишутся переходы, скачивания, оплаты и обращения.</div>
+      <div className="notice">Подробные фильтры и выгрузки доделаем следующим этапом. Уже пишутся переходы, скачивания и обращения.</div>
       <div className="row">
         <button className={flags.logIp ? "btn" : "ghost"} onClick={() => save({ ...flags, logIp: !flags.logIp })}>IP-хеш {flags.logIp ? "вкл" : "выкл"}</button>
         <button className={flags.logUa ? "btn" : "ghost"} onClick={() => save({ ...flags, logUa: !flags.logUa })}>User-Agent {flags.logUa ? "вкл" : "выкл"}</button>

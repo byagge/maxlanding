@@ -3,6 +3,8 @@ interface TelegramWebApp {
   expand: () => void;
   initData: string;
   initDataUnsafe?: { start_param?: string };
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
 }
 
 declare global {

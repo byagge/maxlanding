@@ -50,9 +50,13 @@ export type Landing = {
   visits?: number;
   downloads?: number;
   templateId: string;
-  domainId?: string | null;
+  subdomain?: string | null;
+  customHost?: string | null;
+  customStatus?: string | null;
+  publicHost?: string | null;
+  publicUrl?: string | null;
+  instruction?: string;
   template?: { name: string; theme: string; layout: string };
-  domain?: { hostname: string; status: string } | null;
 };
 
 async function parse<T>(response: Response): Promise<T> {
