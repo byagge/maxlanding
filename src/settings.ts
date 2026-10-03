@@ -5,6 +5,7 @@ import { db } from "./db.js";
 export type PlatformSettings = {
   ns1: string;
   ns2: string;
+  platformDomain: string;
   platformIp: string;
   supportContact: string;
   minTopup: number;
@@ -23,6 +24,7 @@ const SECRET_KEYS = ["cryptobotToken", "xrocketToken", "xrocketWebhookSecret", "
 export const defaultSettings = (): PlatformSettings => ({
   ns1: "ns1.maxlanding.app",
   ns2: "ns2.maxlanding.app",
+  platformDomain: "max.com",
   platformIp: "",
   supportContact: "@maxlanding_support",
   minTopup: 5,
@@ -68,6 +70,9 @@ export async function ensureSettings(): Promise<PlatformSettings> {
 export async function updateSettings(patch: Partial<PlatformSettings>, clear: string[] = []): Promise<PlatformSettings> {
   const current = await ensureSettings();
   const next: PlatformSettings = { ...current, ...patch, minTopup: Number(patch.minTopup ?? current.minTopup) };
+  if (patch.platformDomain !== undefined) {
+    next.platformDomain = String(patch.platformDomain).trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0]?.split(":")[0]?.replace(/\.$/, "") || current.platformDomain;
+  }
   for (const key of SECRET_KEYS) {
     if (clear.includes(key)) next[key] = "";
     else if (!patch[key]) next[key] = current[key];
@@ -84,6 +89,7 @@ export function publicSettings(settings: PlatformSettings) {
   return {
     ns1: settings.ns1,
     ns2: settings.ns2,
+    platformDomain: settings.platformDomain,
     platformIp: settings.platformIp,
     supportContact: settings.supportContact,
     minTopup: settings.minTopup,

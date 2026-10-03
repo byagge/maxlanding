@@ -5,7 +5,8 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { ZodError } from "zod";
-import { config, isPlatformHost } from "./config.js";
+import { isPlatformHost } from "./config.js";
+import { getSettings } from "./settings.js";
 import { db } from "./db.js";
 import { AppError, isAppError } from "./errors.js";
 import { parseFeatures } from "./landings.js";
@@ -76,12 +77,18 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.addHook("onRequest", async (request, reply) => {
     const host = (request.headers.host || "").split(":")[0]?.toLowerCase() || "";
-    if (!host || isPlatformHost(host) || request.url.startsWith("/api") || request.url.startsWith("/l/") || request.url.startsWith("/t/")) return;
-    const domain = await db().domain.findFirst({
-      where: { hostname: host, status: "active" },
-      include: { landings: { where: { status: "active" }, include: { template: true }, take: 1 } },
+    if (!host || request.url.startsWith("/api") || request.url.startsWith("/l/") || request.url.startsWith("/t/")) return;
+    const settings = await getSettings();
+    if (isPlatformHost(host, settings.platformDomain)) return;
+    const suffix = settings.platformDomain ? `.${settings.platformDomain}` : "";
+    const label = suffix && host.endsWith(suffix) ? host.slice(0, -suffix.length) : "";
+    const landing = await db().landing.findFirst({
+      where: {
+        status: "active",
+        OR: [...(label && !label.includes(".") ? [{ subdomain: label }] : []), { customHost: host, customStatus: "active" }],
+      },
+      include: { template: true },
     });
-    const landing = domain?.landings[0];
     if (!landing) return;
     return reply.type("text/html; charset=utf-8").send(renderLanding(landingView(landing), true));
   });

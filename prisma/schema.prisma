@@ -91,9 +91,12 @@ model Landing {
   userId      String
   templateId  String
   domainId    String?
-  slug        String   @unique
-  name        String
-  status      String   @default("draft")
+  slug         String   @unique
+  subdomain    String?  @unique
+  customHost   String?  @unique
+  customStatus String?
+  name         String
+  status       String   @default("draft")
   title       String
   subtitle    String
   buttonText  String

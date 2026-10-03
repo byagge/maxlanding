@@ -8,7 +8,7 @@ import { db } from "./db.js";
 import { activateDomain, addDomain, deleteDomain, listDomains, verifyDomain } from "./domains.js";
 import { AppError } from "./errors.js";
 import { pageQuery } from "./format.js";
-import { assertTheme, createLanding, deleteLanding, getLanding, launchLanding, pauseLanding, presentLanding, trackPublicHit, updateLanding } from "./landings.js";
+import { assertTheme, connectCustomHost, createLanding, decorateMany, deleteLanding, getLanding, launchLanding, pauseLanding, trackPublicHit, updateLanding } from "./landings.js";
 import { checkPayment, createInvoice, creditFromCryptoBot, creditFromXrocket, expirePayments, markPaid } from "./payments.js";
 import { adminSettings, getSettings, publicSettings, updateSettings } from "./settings.js";
 import { adjustBalance, recordEvent, userStats } from "./stats.js";
@@ -141,18 +141,17 @@ export async function registerApi(app: FastifyInstance): Promise<void> {
           _count: { _all: true },
         })
       : [];
-    return {
-      items: items.map((item) => {
-        const visits = grouped.find((row) => row.landingId === item.id && row.type === "visit")?._count._all ?? 0;
-        const downloads = grouped.find((row) => row.landingId === item.id && row.type === "download")?._count._all ?? 0;
-        return { ...presentLanding(item), visits, downloads };
-      }),
-    };
+    const withCounts = items.map((item) => {
+      const visits = grouped.find((row) => row.landingId === item.id && row.type === "visit")?._count._all ?? 0;
+      const downloads = grouped.find((row) => row.landingId === item.id && row.type === "download")?._count._all ?? 0;
+      return { ...item, visits, downloads };
+    });
+    return { items: await decorateMany(withCounts) };
   });
 
   app.post("/api/landings", async (request) => {
     const user = await requireUser(request);
-    return { landing: presentLanding(await createLanding(user, landingSchema.parse(request.body))) };
+    return { landing: await createLanding(user, landingSchema.parse(request.body)) };
   });
   app.get("/api/landings/:id", async (request) => {
     const user = await requireUser(request);
@@ -163,17 +162,23 @@ export async function registerApi(app: FastifyInstance): Promise<void> {
   app.patch("/api/landings/:id", async (request) => {
     const user = await requireUser(request);
     const { id } = request.params as { id: string };
-    return { landing: presentLanding(await updateLanding(user.id, id, landingSchema.partial().parse(request.body))) };
+    return { landing: await updateLanding(user.id, id, landingSchema.partial().parse(request.body)) };
   });
   app.post("/api/landings/:id/launch", async (request) => {
     const user = await requireUser(request);
     const { id } = request.params as { id: string };
-    return { landing: presentLanding(await launchLanding(user.id, id)) };
+    return { landing: await launchLanding(user.id, id) };
+  });
+  app.post("/api/landings/:id/domain", async (request) => {
+    const user = await requireUser(request);
+    const { id } = request.params as { id: string };
+    const body = z.object({ hostname: z.string().min(3).max(253) }).parse(request.body);
+    return connectCustomHost(user.id, id, body.hostname);
   });
   app.post("/api/landings/:id/pause", async (request) => {
     const user = await requireUser(request);
     const { id } = request.params as { id: string };
-    return { landing: presentLanding(await pauseLanding(user.id, id)) };
+    return { landing: await pauseLanding(user.id, id) };
   });
   app.delete("/api/landings/:id", async (request) => {
     const user = await requireUser(request);
@@ -319,6 +324,7 @@ async function registerAdmin(app: FastifyInstance): Promise<void> {
       .object({
         ns1: z.string().min(3).optional(),
         ns2: z.string().min(3).optional(),
+        platformDomain: z.string().max(253).optional(),
         platformIp: z.string().max(64).optional(),
         supportContact: z.string().min(2).max(64).optional(),
         minTopup: z.number().min(1).max(10000).optional(),

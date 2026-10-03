@@ -27,7 +27,8 @@ export const config = {
     .filter(Boolean),
 };
 
-export function isPlatformHost(host: string): boolean {
+export function isPlatformHost(host: string, platformDomain = ""): boolean {
   const name = host.split(":")[0]?.toLowerCase() ?? "";
-  return config.platformHosts.includes(name);
+  if (config.platformHosts.includes(name)) return true;
+  return Boolean(platformDomain) && name === platformDomain.toLowerCase();
 }

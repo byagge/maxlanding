@@ -9,6 +9,7 @@ const { decideDomain, normalizeHostname, nsMatches } = await import("../src/dns.
 const { cryptoBotSignature, decryptSecret, encryptSecret, safeEqualHex, xrocketSignature } = await import("../src/crypto.js");
 const { decodeTonComment, findTonPayment, findTrc20Transfer, trc20Expected } = await import("../src/chains.js");
 const { renderLanding } = await import("../src/render.js");
+const { hostDecision } = await import("../src/landings.js");
 
 test("domain names and NS decisions", () => {
   assert.equal(normalizeHostname("HTTPS://Promo.Example.com/landing"), "promo.example.com");
@@ -17,6 +18,9 @@ test("domain names and NS decisions", () => {
   assert.equal(decideDomain({ actualNs: ["ns1.maxlanding.app", "ns2.maxlanding.app"], actualA: [], expectedNs: ["ns1.maxlanding.app", "ns2.maxlanding.app"], platformIp: "" }).ok, true);
   assert.equal(decideDomain({ actualNs: ["other.ns"], actualA: ["203.0.113.10"], expectedNs: ["ns1.maxlanding.app", "ns2.maxlanding.app"], platformIp: "203.0.113.10" }).status, "active");
   assert.equal(decideDomain({ actualNs: [], actualA: [], expectedNs: ["ns1.maxlanding.app", "ns2.maxlanding.app"], platformIp: "" }).status, "pending_ns");
+  assert.equal(hostDecision(["203.0.113.10"], "203.0.113.10", "promo.example.com").status, "active");
+  assert.equal(hostDecision([], "203.0.113.10", "promo.example.com").status, "pending");
+  assert.equal(hostDecision(["1.1.1.1"], "", "promo.example.com").status, "pending");
 });
 
 test("payment signatures, secrets and chain matching", () => {

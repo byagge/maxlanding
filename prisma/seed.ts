@@ -56,13 +56,13 @@ const templates = [
   {
     slug: "noir-product",
     name: "Нуар",
-    description: "Премиальный экран продукта. Продаётся в магазине.",
+    description: "Премиальный экран продукта.",
     category: "Продукт",
-    price: 19,
+    price: 0,
     theme: "noir",
     layout: "product",
     previewHue: "#d6b36a",
-    inShop: true,
+    inShop: false,
     defaults: {
       title: "Вещь, которую показывают молча",
       subtitle: "Тёмный премиум-экран для дропа, мерча или закрытой поставки.",
@@ -73,13 +73,13 @@ const templates = [
   {
     slug: "harbor-portfolio",
     name: "Гавань",
-    description: "Портфолио с тремя работами. Продаётся в магазине.",
+    description: "Портфолио с тремя работами.",
     category: "Портфолио",
-    price: 9,
+    price: 0,
     theme: "harbor",
     layout: "portfolio",
     previewHue: "#7eb6ff",
-    inShop: true,
+    inShop: false,
     defaults: {
       title: "Работы, которые говорят раньше текста",
       subtitle: "Собранный экран для студии, фриланса или небольшого агентства.",
@@ -90,13 +90,13 @@ const templates = [
   {
     slug: "ember-local",
     name: "Уголь",
-    description: "Страница локального места. Продаётся в магазине.",
+    description: "Страница локального места.",
     category: "Место",
-    price: 12,
+    price: 0,
     theme: "ember",
     layout: "local",
     previewHue: "#ff8a4c",
-    inShop: true,
+    inShop: false,
     defaults: {
       title: "Место, куда приходят по одной ссылке",
       subtitle: "Экран для студии, точки или события: адрес, время и кнопка.",
@@ -119,6 +119,8 @@ export async function seed(): Promise<void> {
         theme: template.theme,
         layout: template.layout,
         previewHue: template.previewHue,
+        price: template.price,
+        inShop: template.inShop,
         defaults: JSON.stringify(template.defaults),
       },
     });
@@ -140,6 +142,7 @@ export async function seed(): Promise<void> {
       userId: admin.id,
       templateId: aurora.id,
       slug: "demo",
+      subdomain: "ldng1",
       name: "Демо Аврора",
       status: "active",
       title: "Демо-лендинг MaxLanding",
@@ -150,6 +153,7 @@ export async function seed(): Promise<void> {
     },
     update: {},
   });
+  await db().landing.updateMany({ where: { slug: "demo", subdomain: null }, data: { subdomain: "ldng1" } });
 }
 
 const isDirectRun = process.argv[1]?.includes("seed");

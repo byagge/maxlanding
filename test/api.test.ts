@@ -36,25 +36,18 @@ async function login(role: "admin" | "user") {
 }
 
 describe("api", { concurrency: 1 }, () => {
-test("dev session, landing launch, visit and download stats", async () => {
+test("launch assigns a platform subdomain and serves it by host", async () => {
   const token = await login("admin");
   const headers = { authorization: `Bearer ${token}` };
-  const created = await app.inject({ method: "POST", url: "/api/domains", headers, payload: { hostname: "https://promo.example.com/path" } });
-  assert.equal(created.statusCode, 200);
-  const domain = created.json().domain;
-  assert.equal(domain.hostname, "promo.example.com");
-  assert.equal(domain.status, "pending_ns");
-
-  const blocked = await app.inject({
-    method: "POST",
-    url: "/api/landings",
+  const settings = await app.inject({
+    method: "PUT",
+    url: "/api/admin/settings",
     headers,
-    payload: { name: "Кампания", templateId: (await templateId(token, "aurora-app")), domainId: domain.id, launch: true },
+    payload: { platformDomain: "max.com", platformIp: "203.0.113.10" },
   });
-  assert.equal(blocked.statusCode, 409);
-
-  const activated = await app.inject({ method: "POST", url: `/api/admin/domains/${domain.id}/activate`, headers, payload: {} });
-  assert.equal(activated.statusCode, 200);
+  assert.equal(settings.statusCode, 200);
+  assert.equal(settings.json().platformDomain, "max.com");
+  assert.equal(settings.json().platformIp, "203.0.113.10");
 
   const landing = await app.inject({
     method: "POST",
@@ -63,7 +56,6 @@ test("dev session, landing launch, visit and download stats", async () => {
     payload: {
       name: "Кампания",
       templateId: await templateId(token, "aurora-app"),
-      domainId: domain.id,
       title: `<img src=x onerror=alert(1)>`,
       subtitle: "Текст",
       buttonText: "Скачать",
@@ -73,14 +65,40 @@ test("dev session, landing launch, visit and download stats", async () => {
     },
   });
   assert.equal(landing.statusCode, 200);
-  const slug = landing.json().landing.slug as string;
-  const page = await app.inject({ method: "GET", url: `/l/${slug}` });
+  const created = landing.json().landing;
+  assert.match(created.subdomain, /^ldng\d+$/);
+  assert.equal(created.publicUrl, `https://${created.subdomain}.max.com`);
+  assert.equal(created.status, "preparing");
+
+  let ready = created;
+  for (let attempt = 0; attempt < 40 && ready.status !== "active"; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    ready = (await app.inject({ method: "GET", url: `/api/landings/${created.id}`, headers })).json().landing;
+  }
+  assert.equal(ready.status, "active");
+
+  const page = await app.inject({ method: "GET", url: `/l/${created.slug}` });
   assert.equal(page.statusCode, 200);
   assert.equal(page.body.includes("<img"), false);
   assert.equal(page.body.includes("&lt;img"), true);
 
-  assert.equal((await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug, type: "visit" } })).statusCode, 200);
-  assert.equal((await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug, type: "download" } })).statusCode, 200);
+  const byHost = await app.inject({ method: "GET", url: "/", headers: { host: `${created.subdomain}.max.com` } });
+  assert.equal(byHost.statusCode, 200);
+  assert.equal(byHost.body.includes("&lt;img"), true);
+
+  const custom = await app.inject({
+    method: "POST",
+    url: `/api/landings/${created.id}/domain`,
+    headers,
+    payload: { hostname: "https://promo.example.com/path" },
+  });
+  assert.equal(custom.statusCode, 200);
+  assert.equal(custom.json().landing.customHost, "promo.example.com");
+  assert.equal(custom.json().landing.customStatus, "pending");
+  assert.match(custom.json().message, /203\.0\.113\.10/);
+
+  assert.equal((await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug: created.slug, type: "visit" } })).statusCode, 200);
+  assert.equal((await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug: created.slug, type: "download" } })).statusCode, 200);
   const dashboard = await app.inject({ method: "GET", url: "/api/dashboard", headers });
   const stats = dashboard.json().stats;
   assert.equal(stats.downloads >= 1, true);
@@ -92,6 +110,7 @@ test("shop purchase needs balance, on-chain invoice and admin confirm", async ()
   const admin = await login("admin");
   const userToken = await login("user");
   const userHeaders = { authorization: `Bearer ${userToken}` };
+  await db().template.update({ where: { slug: "noir-product" }, data: { price: 19, inShop: true } });
   const shop = await app.inject({ method: "GET", url: "/api/templates?scope=shop&pageSize=20", headers: userHeaders });
   const paid = shop.json().items.find((item: { slug: string }) => item.slug === "noir-product");
   const denied = await app.inject({ method: "POST", url: `/api/templates/${paid.id}/buy`, headers: userHeaders });

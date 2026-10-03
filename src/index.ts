@@ -3,6 +3,7 @@ import { startBot } from "./bot.js";
 import { config } from "./config.js";
 import { disconnectDb } from "./db.js";
 import { seed } from "../prisma/seed.js";
+import { resumePreparing } from "./landings.js";
 
 const app = await buildApp();
 try {
@@ -13,6 +14,7 @@ try {
   process.exit(1);
 }
 
+await resumePreparing();
 await app.listen({ port: config.port, host: "0.0.0.0" });
 console.log(`maxlanding http://127.0.0.1:${config.port}`);
 
