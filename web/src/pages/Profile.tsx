@@ -13,7 +13,7 @@ export function ProfilePage({ user }: { user: User }) {
         </div>
       </article>
       <div className="list">
-        <article className="row-card"><span className="grow"><b>Роль</b><span className="muted">{user.role === "admin" ? "Администратор" : "Пользователь"}</span></span></article>
+        <article className="row-card"><span className="grow"><b>Роль</b><span className="muted">{user.role === "admin" ? "Администратор и трафер" : "Трафер"}</span></span></article>
       </div>
     </section>
   );

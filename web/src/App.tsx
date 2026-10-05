@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api, type User } from "./api";
 import { AdminPage } from "./pages/Admin";
 import { CreatePage } from "./pages/Create";
@@ -25,6 +25,7 @@ export function App() {
   const [ready, setReady] = useState(false);
   const [devAuth, setDevAuth] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const screen = new URLSearchParams(location.search).get("screen") || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
@@ -86,19 +87,25 @@ export function App() {
   }
 
   const letter = (user.firstName || "M").slice(0, 1).toUpperCase();
+  const adminMode = location.pathname.startsWith("/admin");
 
   return (
     <div className="phone">
       <header className="top">
-        <span className="avatar">{letter}</span>
-        <strong>MaxLanding</strong>
+        <NavLink to="/profile" className="avatar" aria-label="Профиль">{letter}</NavLink>
+        <span className="brand">
+          <strong>{adminMode ? "Админ" : "Кабинет"}</strong>
+          {user.role === "admin" && (
+            <NavLink to={adminMode ? "/" : "/admin"} className="switch">{adminMode ? "В кабинет" : "В админку"}</NavLink>
+          )}
+        </span>
         <NavLink to="/support" className="bell" aria-label="Поддержка">
           <Icon d="M6 9a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9 M10 21h4" />
         </NavLink>
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<HomePage user={user} />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/create" element={<CreatePage />} />
           <Route path="/domains" element={<DomainsPage />} />
           <Route path="/examples" element={<ExamplesPage />} />
@@ -106,17 +113,29 @@ export function App() {
           <Route path="/logs" element={<LogsPage user={user} onUser={setUser} />} />
           <Route path="/profile" element={<ProfilePage user={user} />} />
           <Route path="/support" element={<SupportPage />} />
-          <Route path="/admin" element={user.role === "admin" ? <AdminPage /> : <Navigate to="/" replace />} />
+          <Route path="/admin" element={user.role === "admin" ? <AdminPage section="overview" /> : <Navigate to="/" replace />} />
+          <Route path="/admin/traffic" element={user.role === "admin" ? <AdminPage section="traffic" /> : <Navigate to="/" replace />} />
+          <Route path="/admin/templates" element={user.role === "admin" ? <AdminPage section="templates" /> : <Navigate to="/" replace />} />
+          <Route path="/admin/settings" element={user.role === "admin" ? <AdminPage section="settings" /> : <Navigate to="/" replace />} />
           <Route path="/landings/:id" element={<EditPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <nav className="dock">
-        <NavLink to="/" end><Icon d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />Главная</NavLink>
-        <NavLink to="/create"><Icon d="M12 5v14M5 12h14" />Создать</NavLink>
-        <NavLink to="/domains"><Icon d="M4 7h16M4 12h16M4 17h10" />Домены</NavLink>
-        <NavLink to="/profile"><Icon d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM5 20a7 7 0 0 1 14 0" />Профиль</NavLink>
-      </nav>
+      {adminMode ? (
+        <nav className="dock">
+          <NavLink to="/admin" end><Icon d="M4 10h7V4H4zM13 20h7v-6h-7zM13 10h7V4h-7zM4 20h7v-6H4z" />Обзор</NavLink>
+          <NavLink to="/admin/traffic"><Icon d="M4 19V10M10 19V5M16 19v-7M22 19H2" />Трафик</NavLink>
+          <NavLink to="/admin/templates"><Icon d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />Шаблоны</NavLink>
+          <NavLink to="/admin/settings"><Icon d="M4 7h16M4 12h16M4 17h10" />Настройки</NavLink>
+        </nav>
+      ) : (
+        <nav className="dock">
+          <NavLink to="/" end><Icon d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />Главная</NavLink>
+          <NavLink to="/create"><Icon d="M12 5v14M5 12h14" />Создать</NavLink>
+          <NavLink to="/domains"><Icon d="M4 7h16M4 12h16M4 17h10" />Домены</NavLink>
+          <NavLink to="/invite"><Icon d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM19 8v6M22 11h-6" />Пригласить</NavLink>
+        </nav>
+      )}
     </div>
   );
 }

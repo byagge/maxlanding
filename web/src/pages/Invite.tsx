@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
 import { api, when } from "../api";
 
-type Referral = { code: string; items: Array<{ id: string; telegramId: string; username?: string | null; firstName?: string | null; createdAt: string }> };
+type Referral = {
+  code: string;
+  inviteUrl: string;
+  items: Array<{ id: string; telegramId: string; username?: string | null; firstName?: string | null; role: string; createdAt: string }>;
+};
 
 export function InvitePage() {
   const [data, setData] = useState<Referral | null>(null);
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const link = data?.inviteUrl || (data ? `/start ref_${data.code}` : "");
 
   useEffect(() => {
     api<Referral>("/api/referrals").then(setData).catch((reason) => setError(reason.message));
@@ -28,14 +33,15 @@ export function InvitePage() {
     <section className="page">
       <p className="kicker">Рефералы</p>
       <h1>Пригласить</h1>
-      <article className="lime">
+      <article className="lime stack">
         <div>
-          <span>Ваш код</span>
-          <b>{data?.code || "…"}</b>
-          <small>/start ref_{data?.code || ""}</small>
+          <span>Ссылка приглашения</span>
+          <b className="link">{link || "…"}</b>
+          <small>Код {data?.code || "…"}</small>
         </div>
+        <button type="button" className="pill" onClick={() => { if (link) navigator.clipboard?.writeText(link).then(() => setMessage("Ссылка скопирована")).catch(() => setMessage(link)); }}>Копировать</button>
       </article>
-      <p className="lede">Новый воркер открывает бота с этим кодом. Потоки ссылок остаются раздельными: статистика каждого видна ему и админу.</p>
+      <p className="lede">Приглашённый получает тот же кабинет: свои ссылки, домены, логи и своё приглашение. Отдельной урезанной роли нет. Статистика потоков остаётся у каждого своя и видна админу.</p>
       <form onSubmit={apply}>
         <label className="field"><span>Ввести чужой код</span><input value={code} onChange={(event) => setCode(event.target.value)} placeholder="ref_код" /></label>
         <button className="btn" type="submit">Принять</button>
@@ -46,7 +52,7 @@ export function InvitePage() {
       <div className="list">
         {data?.items.map((item) => (
           <article key={item.id} className="row-card">
-            <span className="grow"><b>{item.firstName || item.username || item.telegramId}</b><span className="muted">{item.telegramId}</span></span>
+            <span className="grow"><b>{item.firstName || item.username || item.telegramId}</b><span className="muted">{item.telegramId} · {item.role === "admin" ? "админ" : "трафер"}</span></span>
             <span className="muted">{when(item.createdAt)}</span>
           </article>
         ))}

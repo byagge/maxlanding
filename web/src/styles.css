@@ -32,8 +32,10 @@ button { cursor: pointer; }
   padding: 18px 18px 108px;
   box-shadow: 0 0 0 1px rgba(18, 19, 22, 0.04);
 }
-.top { display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; margin-bottom: 22px; }
+.top { display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; gap: 8px; margin-bottom: 22px; }
+.brand { display: grid; justify-items: center; gap: 2px; min-width: 0; }
 .top strong { text-align: center; font-size: 17px; letter-spacing: -0.03em; }
+.switch { font-size: 12px; font-weight: 650; color: #111; background: var(--lime); border-radius: 999px; padding: 3px 8px; }
 .avatar, .bell {
   width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
   background: #fff; box-shadow: var(--shadow); color: var(--ink);
@@ -55,6 +57,9 @@ button { cursor: pointer; }
   box-shadow: 0 16px 30px rgba(176, 220, 40, 0.28);
   margin-bottom: 22px;
 }
+.lime.stack { flex-direction: column; align-items: stretch; gap: 12px; }
+.lime.stack .pill { align-self: flex-start; }
+.lime b.link { font-size: 16px; line-height: 1.35; letter-spacing: -0.03em; word-break: break-all; }
 .lime span, .lime small { display: block; }
 .lime b { display: block; font-size: 32px; letter-spacing: -0.05em; margin: 4px 0; }
 .lime small { color: rgba(20, 32, 0, 0.62); }

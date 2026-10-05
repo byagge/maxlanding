@@ -322,12 +322,41 @@ async function registerAdmin(app: FastifyInstance): Promise<void> {
   app.get("/api/admin/users", async (request) => {
     await requireAdmin(request);
     const { q } = request.query as { q?: string };
+    const users = await db().user.findMany({
+      where: q ? { OR: [{ username: { contains: q } }, { telegramId: { contains: q } }, { firstName: { contains: q } }] } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        telegramId: true,
+        username: true,
+        firstName: true,
+        role: true,
+        referralCode: true,
+        createdAt: true,
+        _count: { select: { landings: true } },
+      },
+    });
+    const ids = users.map((user) => user.id);
+    const [referrals, visits] = ids.length
+      ? await Promise.all([
+          db().user.groupBy({ by: ["referredById"], where: { referredById: { in: ids } }, _count: { _all: true } }),
+          db().event.groupBy({ by: ["userId"], where: { userId: { in: ids }, type: "visit" }, _count: { _all: true } }),
+        ])
+      : [[], []];
     return {
-      items: await db().user.findMany({
-        where: q ? { OR: [{ username: { contains: q } }, { telegramId: { contains: q } }, { firstName: { contains: q } }] } : undefined,
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
+      items: users.map((user) => ({
+        id: user.id,
+        telegramId: user.telegramId,
+        username: user.username,
+        firstName: user.firstName,
+        role: user.role,
+        referralCode: user.referralCode,
+        createdAt: user.createdAt,
+        landings: user._count.landings,
+        referrals: referrals.find((row) => row.referredById === user.id)?._count._all ?? 0,
+        visits: visits.find((row) => row.userId === user.id)?._count._all ?? 0,
+      })),
     };
   });
 
@@ -434,5 +463,23 @@ async function registerAdmin(app: FastifyInstance): Promise<void> {
   app.get("/api/admin/tickets", async (request) => {
     await requireAdmin(request);
     return { items: await db().supportTicket.findMany({ include: { user: { select: { telegramId: true, username: true, firstName: true } } }, orderBy: { createdAt: "desc" }, take: 100 }) };
+  });
+
+  app.get("/api/admin/logs", async (request) => {
+    await requireAdmin(request);
+    const query = request.query as { page?: string; type?: string };
+    const paging = pageQuery(query, 20);
+    const where = query.type ? { type: query.type } : {};
+    const [total, items] = await Promise.all([
+      db().event.count({ where }),
+      db().event.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: paging.skip,
+        take: paging.pageSize,
+        include: { landing: { select: { name: true, slug: true, user: { select: { telegramId: true, firstName: true } } } } },
+      }),
+    ]);
+    return { items, page: paging.page, pages: Math.max(1, Math.ceil(total / paging.pageSize)), total };
   });
 }

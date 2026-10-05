@@ -252,7 +252,25 @@ test("analytics, referrals and template guard ignore form contents", async () =>
   });
   assert.equal(joined.statusCode, 200);
   const again = await app.inject({ method: "GET", url: "/api/referrals", headers });
-  assert.equal(again.json().items.some((item: { telegramId: string }) => item.telegramId === "20000"), true);
+  const invited = again.json().items.find((item: { telegramId: string; role: string }) => item.telegramId === "20000");
+  assert.equal(invited.role, "user");
+  const own = await app.inject({
+    method: "POST",
+    url: "/api/landings",
+    headers: { authorization: `Bearer ${userToken}` },
+    payload: { name: "Поток приглашённого", templateId: await templateId(userToken, "pulse-saas"), launch: true },
+  });
+  assert.equal(own.statusCode, 200);
+  assert.equal(typeof own.json().landing.subdomain, "string");
+  const people = await app.inject({ method: "GET", url: "/api/admin/users", headers });
+  const row = people.json().items.find((item: { telegramId: string }) => item.telegramId === "20000");
+  assert.equal(row.landings >= 1, true);
+  assert.equal(row.referrals, 0);
+  const adminRow = people.json().items.find((item: { telegramId: string }) => item.telegramId === "10000");
+  assert.equal(adminRow.referrals >= 1, true);
+  const logs = await app.inject({ method: "GET", url: "/api/admin/logs", headers });
+  assert.equal(logs.statusCode, 200);
+  assert.equal(logs.json().items.some((item: { type: string }) => item.type === "visit"), true);
 });
 });
 

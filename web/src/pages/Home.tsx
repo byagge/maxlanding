@@ -6,12 +6,12 @@ const actions = [
   ["/create", "Создать ссылку", "Шаблон и уникальный адрес"],
   ["/domains", "Домены", "NS, A-запись и Cloudflare"],
   ["/examples", "Примеры лендингов", "Живые экраны шаблонов"],
-  ["/invite", "Пригласить", "Реферальный код воркера"],
+  ["/invite", "Пригласить", "Тот же кабинет, свои ссылки и статистика"],
   ["/logs", "Логи", "Источник, время и клики"],
   ["/support", "Поддержка", "Написать в сервис"],
 ];
 
-export function HomePage({ user }: { user: { role: string } }) {
+export function HomePage() {
   const [stats, setStats] = useState<Stats>({ visits: 0, downloads: 0, conversion: "0%" });
   const [landings, setLandings] = useState<Landing[]>([]);
 
@@ -42,13 +42,6 @@ export function HomePage({ user }: { user: { role: string } }) {
             <span className="chevron">›</span>
           </Link>
         ))}
-        {user.role === "admin" && (
-          <Link to="/admin" className="row-card">
-            <span className="glyph">П</span>
-            <span className="grow"><b>Панель управления</b><span className="muted">Домен платформы и шаблоны</span></span>
-            <span className="chevron">›</span>
-          </Link>
-        )}
       </div>
       <div className="section-title">Мои лендинги <span>{landings.length}</span></div>
       <div className="list">

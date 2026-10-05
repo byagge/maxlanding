@@ -12,6 +12,7 @@ const { renderLanding } = await import("../src/render.js");
 const { hostDecision } = await import("../src/landings.js");
 const { dnsTarget } = await import("../src/cloudflare.js");
 const { assertTemplateHtml } = await import("../src/catalog.js");
+const { isPremiumEmojiError, menuMarkup } = await import("../src/emoji.js");
 
 test("domain names and NS decisions", () => {
   assert.equal(normalizeHostname("HTTPS://Promo.Example.com/landing"), "promo.example.com");
@@ -46,6 +47,22 @@ test("payment signatures, secrets and chain matching", () => {
   const comment = Buffer.from("mlpayment1").toString("base64");
   assert.equal(decodeTonComment(comment), "mlpayment1");
   assert.equal(findTonPayment([{ in_msg: { value: "2000000000", message: comment }, transaction_id: { hash: "tonhash" } }], "mlpayment1", 1500000000n), "tonhash");
+});
+
+test("premium menu falls back to plain buttons", () => {
+  const plain = menuMarkup(false, false, "");
+  const worker = plain.inline_keyboard.flat();
+  assert.equal(worker.every((button) => button.icon_custom_emoji_id === undefined && button.style === undefined), true);
+  assert.equal(worker.some((button) => "callback_data" in button && button.callback_data === "go:invite"), true);
+  assert.equal(worker.some((button) => "callback_data" in button && button.callback_data === "go:admin"), false);
+  const premium = menuMarkup(true, true, "https://app.example");
+  const admin = premium.inline_keyboard.flat();
+  assert.equal(admin.some((button) => button.icon_custom_emoji_id === "5357107601584693888"), true);
+  assert.equal(admin.some((button) => "web_app" in button && button.web_app.url === "https://app.example?screen=invite"), true);
+  assert.equal(admin.every((button) => !("callback_data" in button)), true);
+  assert.equal(isPremiumEmojiError({ description: "Bad Request: BUTTON_USER_PRIVACY_RESTRICTED" }), false);
+  assert.equal(isPremiumEmojiError({ description: "Bad Request: invalid custom emoji identifier specified" }), true);
+  assert.equal(isPremiumEmojiError({ error: { description: "bots can't use BUTTON_STYLE without premium" } }), true);
 });
 
 test("public landing escapes content", () => {

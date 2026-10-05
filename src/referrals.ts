@@ -31,10 +31,14 @@ export async function applyReferral(userId: string, code: string): Promise<{ ok:
 
 export async function listReferrals(userId: string) {
   const code = await ensureReferralCode(userId);
-  const items = await db().user.findMany({
-    where: { referredById: userId },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, telegramId: true, username: true, firstName: true, createdAt: true },
-  });
-  return { code, items };
+  const [items, bot] = await Promise.all([
+    db().user.findMany({
+      where: { referredById: userId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, telegramId: true, username: true, firstName: true, role: true, createdAt: true },
+    }),
+    db().setting.findUnique({ where: { key: "bot_username" } }),
+  ]);
+  const inviteUrl = bot?.value ? `https://t.me/${bot.value}?start=ref_${code}` : "";
+  return { code, inviteUrl, items };
 }

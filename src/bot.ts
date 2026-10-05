@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import { config } from "./config.js";
 import { db } from "./db.js";
+import { isPremiumEmojiError, menuMarkup } from "./emoji.js";
 import { AppError } from "./errors.js";
 import { createLanding } from "./landings.js";
 import { applyReferral, listReferrals } from "./referrals.js";
@@ -10,31 +11,23 @@ import { upsertTelegramUser } from "./telegram.js";
 
 type Draft = { name?: string };
 
-const screens = [
-  ["🔗 Создать ссылку", "create"],
-  ["🌐 Домены", "domains"],
-  ["🏷 Примеры лендингов", "examples"],
-  ["🔔 Логи", "logs"],
-  ["👥 Пригласить", "invite"],
-  ["🎛 Панель управления", "admin"],
-  ["💬 Поддержка", "support"],
-] as const;
+let premiumButtons = true;
 
-function menuKeyboard(): InlineKeyboard {
-  const web = config.webappUrl.startsWith("https://") ? config.webappUrl.replace(/\/$/, "") : "";
-  const kb = new InlineKeyboard();
-  const rows = [1, 1, 1, 2, 1, 1];
-  let index = 0;
-  for (const size of rows) {
-    for (let i = 0; i < size; i += 1) {
-      const [label, screen] = screens[index];
-      index += 1;
-      if (web) kb.webApp(label, `${web}?screen=${screen}`);
-      else kb.text(label, `go:${screen}`);
-    }
-    if (index < screens.length) kb.row();
+async function replyMenu(ctx: Context, text: string, isAdmin: boolean): Promise<void> {
+  const web = config.webappUrl.startsWith("https://") ? config.webappUrl : "";
+  const send = (premium: boolean) => ctx.reply(text, { reply_markup: menuMarkup(isAdmin, premium, web) });
+  if (!premiumButtons) {
+    await send(false);
+    return;
   }
-  return kb;
+  try {
+    await send(true);
+  } catch (error) {
+    if (!isPremiumEmojiError(error)) throw error;
+    premiumButtons = false;
+    console.error("premium emoji недоступны этому боту, меню без custom emoji");
+    await send(false);
+  }
 }
 
 async function actor(ctx: Context) {
@@ -65,7 +58,7 @@ async function writeState(userId: string, step: string, data: Draft): Promise<vo
 async function showMenu(ctx: Context): Promise<void> {
   const user = await actor(ctx);
   const stats = await userStats(user.id);
-  await ctx.reply(statsText(stats), { reply_markup: menuKeyboard() });
+  await replyMenu(ctx, statsText(stats), user.role === "admin");
 }
 
 function plainError(error: unknown): string {
@@ -160,7 +153,8 @@ async function openScreen(ctx: Context, userId: string, screen: string, page = 1
   }
   if (screen === "invite") {
     const data = await listReferrals(userId);
-    await ctx.reply(`Код приглашения: ${data.code}\nСсылка для бота: /start ref_${data.code}\nПриглашено: ${data.items.length}`);
+    const link = data.inviteUrl || `/start ref_${data.code}`;
+    await ctx.reply(`Приглашение даёт такой же кабинет трафера: свои ссылки, домены и статистика.\n\nКод: ${data.code}\n${link}\nПриглашено: ${data.items.length}`);
     return;
   }
   if (screen === "examples") {
@@ -180,7 +174,7 @@ async function openScreen(ctx: Context, userId: string, screen: string, page = 1
       .text(`IP ${user.logIp ? "вкл" : "выкл"}`, "log:ip")
       .text(`UA ${user.logUa ? "вкл" : "выкл"}`, "log:ua")
       .text(`Ref ${user.logReferrer ? "вкл" : "выкл"}`, "log:ref");
-    await ctx.reply(`Последние события. Подробные фильтры добавим следующим этапом.\n\n${lines}`, { reply_markup: kb });
+    await ctx.reply(`Источник, прямые заходы, время на странице и клики. Содержимое форм не пишется.\n\n${lines}`, { reply_markup: kb });
     return;
   }
   if (screen === "profile") {
@@ -195,7 +189,7 @@ async function openScreen(ctx: Context, userId: string, screen: string, page = 1
     }
     const [users, landings, tickets] = await Promise.all([db().user.count(), db().landing.count(), db().supportTicket.count()]);
     const settings = await getSettings();
-    await ctx.reply(`Панель управления\nПользователи: ${users}\nЛендинги: ${landings}\nОбращения: ${tickets}\nДомен платформы: ${settings.platformDomain}\nIP для A-записи: ${settings.platformIp || "не задан"}`);
+    await ctx.reply(`Панель управления\nПользователи: ${users}\nЛендинги: ${landings}\nОбращения: ${tickets}\nДомен платформы: ${settings.platformDomain}\nIP для A-записи: ${settings.platformIp || "не задан"}\n\nШаблоны, общий трафик и домены — в мини-приложении, раздел «Админ». Кабинет трафера у вас тот же, что у приглашённых.`);
     return;
   }
   await writeState(userId, "support_text", {});
@@ -234,7 +228,14 @@ export async function startBot(): Promise<Bot> {
     { command: "cancel", description: "Сбросить текущий шаг" },
   ]);
   void bot.start({
-    onStart: (info) => console.log(`bot @${info.username} polling`),
+    onStart: (info) => {
+      console.log(`bot @${info.username} polling`);
+      db().setting.upsert({
+        where: { key: "bot_username" },
+        create: { key: "bot_username", value: info.username },
+        update: { value: info.username },
+      }).catch((error) => console.error("bot username", error));
+    },
   });
   return bot;
 }
