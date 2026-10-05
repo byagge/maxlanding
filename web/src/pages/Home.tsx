@@ -3,10 +3,11 @@ import { Link } from "react-router-dom";
 import { api, type Landing, type Stats } from "../api";
 
 const actions = [
-  ["/create", "Создать ленд", "Шаблон, название и запуск"],
-  ["/examples", "Примеры лендингов", "Живые экраны, по три на страницу"],
-  ["/logs", "Настройки логов", "Переходы и скачивания"],
-  ["/profile", "Профиль", "Аккаунт Telegram"],
+  ["/create", "Создать ссылку", "Шаблон и уникальный адрес"],
+  ["/domains", "Домены", "NS, A-запись и Cloudflare"],
+  ["/examples", "Примеры лендингов", "Живые экраны шаблонов"],
+  ["/invite", "Пригласить", "Реферальный код воркера"],
+  ["/logs", "Логи", "Источник, время и клики"],
   ["/support", "Поддержка", "Написать в сервис"],
 ];
 
@@ -23,14 +24,14 @@ export function HomePage({ user }: { user: { role: string } }) {
     <section className="page">
       <p className="kicker">Статистика</p>
       <div className="hero-num">{stats.visits}</div>
-      <p className="lede" style={{ marginTop: -8 }}>Переходов · скачиваний {stats.downloads} · конверсия {stats.conversion}</p>
+      <p className="lede" style={{ marginTop: -8 }}>Переходов · прямых {stats.direct ?? 0} · кликов {stats.clicks ?? 0}</p>
       <article className="lime">
         <div>
-          <span>Скачивание АПК</span>
-          <b>{stats.downloads}</b>
-          <small>Конверсия {stats.conversion}</small>
+          <span>Среднее время</span>
+          <b>{stats.avgSeconds ?? 0} с</b>
+          <small>Конверсия клика {stats.conversion}</small>
         </div>
-        <Link to="/create" className="pill">Создать</Link>
+        <Link to="/create" className="pill">Ссылка</Link>
       </article>
       <div className="section-title">Разделы</div>
       <div className="list">

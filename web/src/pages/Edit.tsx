@@ -75,6 +75,7 @@ export function EditPage() {
         </div>
       </article>
       <p className="lede">{landing.instruction}</p>
+      {landing.dnsDetail && <p className="muted">{landing.dnsStatus}: {landing.dnsDetail}</p>}
       {landing.publicUrl && <p><a href={`/l/${landing.slug}`}>Открыть локальную копию</a></p>}
       <form onSubmit={connect}>
         <label className="field"><span>Свой домен</span><input value={hostname} placeholder="landing.example.com" onChange={(event) => setHostname(event.target.value)} /></label>

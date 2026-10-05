@@ -10,7 +10,7 @@ export type User = {
   logReferrer: boolean;
 };
 
-export type Stats = { visits: number; downloads: number; conversion: string };
+export type Stats = { visits: number; downloads: number; conversion: string; direct?: number; clicks?: number; pixels?: number; avgSeconds?: number };
 
 export type Template = {
   id: string;
@@ -56,6 +56,9 @@ export type Landing = {
   publicHost?: string | null;
   publicUrl?: string | null;
   instruction?: string;
+  pixelUrl?: string | null;
+  dnsStatus?: string;
+  dnsDetail?: string;
   template?: { name: string; theme: string; layout: string };
 };
 

@@ -7,6 +7,7 @@ export function CreatePage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState("");
   const [name, setName] = useState("");
+  const [pixelUrl, setPixelUrl] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -24,7 +25,7 @@ export function CreatePage() {
     try {
       const data = await api<{ landing: { id: string } }>("/api/landings", {
         method: "POST",
-        body: JSON.stringify({ name, templateId, launch: true }),
+        body: JSON.stringify({ name, templateId, pixelUrl: pixelUrl || null, launch: true }),
       });
       navigate(`/landings/${data.landing.id}`);
     } catch (reason) {
@@ -40,6 +41,7 @@ export function CreatePage() {
       <p className="lede">Страница запускается на поддомене платформы. Свой домен подключается позже одной A-записью.</p>
       <form onSubmit={launch}>
         <label className="field"><span>Название</span><input value={name} onChange={(event) => setName(event.target.value)} required minLength={2} placeholder="Кампания" /></label>
+        <label className="field"><span>Пиксель, https, необязательно</span><input value={pixelUrl} placeholder="https://example.com/pixel.gif" onChange={(event) => setPixelUrl(event.target.value)} /></label>
         <div className="list">
           {templates.map((template) => (
             <button key={template.id} type="button" className={`template${template.id === templateId ? " on" : ""}`} onClick={() => setTemplateId(template.id)}>

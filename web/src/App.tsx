@@ -5,7 +5,9 @@ import { AdminPage } from "./pages/Admin";
 import { CreatePage } from "./pages/Create";
 import { EditPage } from "./pages/Edit";
 import { ExamplesPage } from "./pages/Examples";
+import { DomainsPage } from "./pages/Domains";
 import { HomePage } from "./pages/Home";
+import { InvitePage } from "./pages/Invite";
 import { LogsPage } from "./pages/Logs";
 import { ProfilePage } from "./pages/Profile";
 import { SupportPage } from "./pages/Support";
@@ -26,6 +28,8 @@ export function App() {
 
   useEffect(() => {
     const screen = new URLSearchParams(location.search).get("screen") || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+    const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param || "";
+    if (startParam.startsWith("ref_")) sessionStorage.setItem("ml_ref", startParam.slice(4));
     if (screen) navigate(`/${screen === "admin" ? "admin" : screen}`, { replace: true });
     window.Telegram?.WebApp?.ready();
     window.Telegram?.WebApp?.expand();
@@ -46,6 +50,11 @@ export function App() {
       .then((data) => {
         localStorage.setItem("ml_token", data.token);
         setUser(data.user);
+        const ref = sessionStorage.getItem("ml_ref");
+        if (ref) {
+          sessionStorage.removeItem("ml_ref");
+          api("/api/referrals/apply", { method: "POST", body: JSON.stringify({ code: ref }) }).catch(() => undefined);
+        }
       })
       .catch(() => localStorage.removeItem("ml_token"))
       .finally(() => setReady(true));
@@ -91,7 +100,9 @@ export function App() {
         <Routes>
           <Route path="/" element={<HomePage user={user} />} />
           <Route path="/create" element={<CreatePage />} />
+          <Route path="/domains" element={<DomainsPage />} />
           <Route path="/examples" element={<ExamplesPage />} />
+          <Route path="/invite" element={<InvitePage />} />
           <Route path="/logs" element={<LogsPage user={user} onUser={setUser} />} />
           <Route path="/profile" element={<ProfilePage user={user} />} />
           <Route path="/support" element={<SupportPage />} />
@@ -103,7 +114,7 @@ export function App() {
       <nav className="dock">
         <NavLink to="/" end><Icon d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />Главная</NavLink>
         <NavLink to="/create"><Icon d="M12 5v14M5 12h14" />Создать</NavLink>
-        <NavLink to="/examples"><Icon d="M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM13 13h6v6h-6z" />Примеры</NavLink>
+        <NavLink to="/domains"><Icon d="M4 7h16M4 12h16M4 17h10" />Домены</NavLink>
         <NavLink to="/profile"><Icon d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zM5 20a7 7 0 0 1 14 0" />Профиль</NavLink>
       </nav>
     </div>

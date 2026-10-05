@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { api, when, type User } from "../api";
 
-type LogItem = { id: string; type: string; createdAt: string; ipHash?: string | null; userAgent?: string | null; referrer?: string | null; landing?: { name: string } | null };
+type LogItem = { id: string; type: string; createdAt: string; meta?: string; ipHash?: string | null; userAgent?: string | null; referrer?: string | null; landing?: { name: string } | null };
+
+function detail(item: LogItem): string {
+  try {
+    const meta = JSON.parse(item.meta || "{}") as { source?: string; element?: string; duration?: number };
+    return [meta.source, meta.element, typeof meta.duration === "number" ? `${meta.duration} с` : ""].filter(Boolean).join(" · ");
+  } catch {
+    return "";
+  }
+}
 
 export function LogsPage({ user, onUser }: { user: User; onUser: (user: User) => void }) {
   const [items, setItems] = useState<LogItem[]>([]);
@@ -24,8 +33,8 @@ export function LogsPage({ user, onUser }: { user: User; onUser: (user: User) =>
 
   return (
     <section className="page">
-      <h1>Настройки логов</h1>
-      <div className="notice">Подробные фильтры и выгрузки доделаем следующим этапом. Уже пишутся переходы, скачивания и обращения.</div>
+      <h1>Логи трафика</h1>
+      <div className="notice">Пишутся источник, прямой заход, время на странице, клики по элементам и срабатывание пикселя. Содержимое полей форм не сохраняется.</div>
       <div className="row">
         <button className={flags.logIp ? "btn" : "ghost"} onClick={() => save({ ...flags, logIp: !flags.logIp })}>IP-хеш {flags.logIp ? "вкл" : "выкл"}</button>
         <button className={flags.logUa ? "btn" : "ghost"} onClick={() => save({ ...flags, logUa: !flags.logUa })}>User-Agent {flags.logUa ? "вкл" : "выкл"}</button>
@@ -34,7 +43,7 @@ export function LogsPage({ user, onUser }: { user: User; onUser: (user: User) =>
       <div className="grid" style={{ marginTop: 14 }}>
         {items.map((item) => (
           <article key={item.id} className="log-row">
-            <div><b>{item.type}</b><div className="muted">{item.landing?.name || "система"} {item.ipHash ? `· ${item.ipHash.slice(0, 8)}` : ""}</div></div>
+            <div><b>{item.type}</b><div className="muted">{item.landing?.name || "система"} {detail(item)}</div></div>
             <span className="muted">{when(item.createdAt)}</span>
           </article>
         ))}
