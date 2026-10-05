@@ -48,6 +48,14 @@ export async function buyTemplate(user: User, templateId: string) {
   return { balance: money(updated.balance), templateId };
 }
 
+export function assertTemplateHtml(html: string): void {
+  const lower = html.toLowerCase();
+  const blocked = ["type=\"password\"", "type='password'", "one-time-code", "document.cookie", "localstorage", "sessionstorage"];
+  if (blocked.some((item) => lower.includes(item))) {
+    throw new AppError(400, "template_rejected", "Шаблон не может забирать пароли, коды, куки или хранилище браузера");
+  }
+}
+
 export async function saveTemplate(input: {
   id?: string;
   slug: string;
@@ -59,9 +67,12 @@ export async function saveTemplate(input: {
   layout: string;
   previewHue: string;
   defaults: unknown;
+  html?: string;
   published: boolean;
   inShop: boolean;
 }) {
+  const html = input.html?.slice(0, 200_000) || "";
+  assertTemplateHtml(html);
   const data = {
     slug: input.slug.trim().toLowerCase(),
     name: input.name.trim().slice(0, 60),
@@ -72,6 +83,7 @@ export async function saveTemplate(input: {
     layout: input.layout,
     previewHue: input.previewHue,
     defaults: JSON.stringify(input.defaults),
+    html,
     published: input.published,
     inShop: input.inShop,
   };

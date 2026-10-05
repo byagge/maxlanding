@@ -8,7 +8,8 @@ import { db } from "./db.js";
 import { activateDomain, addDomain, deleteDomain, listDomains, verifyDomain } from "./domains.js";
 import { AppError } from "./errors.js";
 import { pageQuery } from "./format.js";
-import { assertTheme, connectCustomHost, createLanding, decorateMany, deleteLanding, getLanding, launchLanding, pauseLanding, trackPublicHit, updateLanding } from "./landings.js";
+import { assertTheme, attachPlatformDns, connectCustomHost, createLanding, decorateMany, deleteLanding, getLanding, launchLanding, pauseLanding, trackPublicHit, updateLanding } from "./landings.js";
+import { applyReferral, listReferrals } from "./referrals.js";
 import { checkPayment, createInvoice, creditFromCryptoBot, creditFromXrocket, expirePayments, markPaid } from "./payments.js";
 import { adminSettings, getSettings, publicSettings, updateSettings } from "./settings.js";
 import { adjustBalance, recordEvent, userStats } from "./stats.js";
@@ -25,6 +26,7 @@ const landingSchema = z.object({
   buttonText: z.string().max(32).optional(),
   downloadUrl: z.string().max(500).nullable().optional(),
   features: z.array(z.string().max(80)).max(6).optional(),
+  pixelUrl: z.string().max(500).nullable().optional(),
   launch: z.boolean().optional(),
 });
 
@@ -43,6 +45,7 @@ const templateSchema = z.object({
     button: z.string().max(32),
     features: z.array(z.string().max(80)).max(6),
   }),
+  html: z.string().max(200000).optional(),
   published: z.boolean(),
   inShop: z.boolean(),
 });
@@ -91,6 +94,13 @@ export async function registerApi(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/settings/public", async () => publicSettings(await getSettings()));
+
+  app.get("/api/referrals", async (request) => listReferrals((await requireUser(request)).id));
+  app.post("/api/referrals/apply", async (request) => {
+    const user = await requireUser(request);
+    const { code } = z.object({ code: z.string().min(2).max(40) }).parse(request.body);
+    return applyReferral(user.id, code.replace(/^ref_/, ""));
+  });
 
   app.patch("/api/me/logs", async (request) => {
     const user = await requireUser(request);
@@ -169,6 +179,13 @@ export async function registerApi(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     return { landing: await launchLanding(user.id, id) };
   });
+  app.post("/api/landings/:id/dns", async (request) => {
+    const user = await requireUser(request);
+    const { id } = request.params as { id: string };
+    await getLanding(user.id, id);
+    await attachPlatformDns(id);
+    return { landing: await getLanding(user.id, id) };
+  });
   app.post("/api/landings/:id/domain", async (request) => {
     const user = await requireUser(request);
     const { id } = request.params as { id: string };
@@ -230,7 +247,14 @@ export async function registerApi(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/public/hit", async (request, reply) => {
-    const { slug, type } = z.object({ slug: z.string().min(1), type: z.enum(["visit", "download"]) }).parse(request.body);
+    const { slug, type, session, source, duration, element } = z.object({
+      slug: z.string().min(1).max(80),
+      type: z.enum(["visit", "download", "heartbeat", "click", "pixel"]),
+      session: z.string().max(40).optional(),
+      source: z.string().max(80).optional(),
+      duration: z.number().min(0).max(86_400).optional(),
+      element: z.string().max(80).optional(),
+    }).strict().parse(request.body);
     const key = `${request.ip}:${slug}:${type}`;
     const now = Date.now();
     const row = hits.get(key);
@@ -241,6 +265,10 @@ export async function registerApi(app: FastifyInstance): Promise<void> {
       ip: request.ip,
       userAgent: request.headers["user-agent"],
       referrer: typeof request.headers.referer === "string" ? request.headers.referer : undefined,
+      session,
+      source,
+      duration,
+      element,
     });
     return { ok: true };
   });
@@ -288,7 +316,7 @@ async function registerAdmin(app: FastifyInstance): Promise<void> {
       db().supportTicket.count(),
       db().payment.aggregate({ where: { status: "paid" }, _sum: { amount: true } }),
     ]);
-    return { users, domains, landings, payments, tickets, volume: volume._sum.amount || 0 };
+    return { users, domains, landings, payments, tickets, volume: volume._sum.amount || 0, analytics: await userStats() };
   });
 
   app.get("/api/admin/users", async (request) => {
@@ -326,6 +354,9 @@ async function registerAdmin(app: FastifyInstance): Promise<void> {
         ns2: z.string().min(3).optional(),
         platformDomain: z.string().max(253).optional(),
         platformIp: z.string().max(64).optional(),
+        originHost: z.string().max(253).optional(),
+        cloudflareZoneId: z.string().max(64).optional(),
+        cloudflareToken: z.string().optional(),
         supportContact: z.string().min(2).max(64).optional(),
         minTopup: z.number().min(1).max(10000).optional(),
         cryptobotToken: z.string().optional(),
@@ -336,7 +367,7 @@ async function registerAdmin(app: FastifyInstance): Promise<void> {
         tonApiKey: z.string().optional(),
         tronWallet: z.string().max(120).optional(),
         tronApiKey: z.string().optional(),
-        clearSecrets: z.array(z.enum(["cryptobotToken", "xrocketToken", "xrocketWebhookSecret", "tonApiKey", "tronApiKey"])).optional(),
+        clearSecrets: z.array(z.enum(["cryptobotToken", "xrocketToken", "xrocketWebhookSecret", "tonApiKey", "tronApiKey", "cloudflareToken"])).optional(),
       })
       .parse(request.body);
     const { clearSecrets, ...patch } = body;

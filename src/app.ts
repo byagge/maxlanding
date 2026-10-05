@@ -11,7 +11,7 @@ import { db } from "./db.js";
 import { AppError, isAppError } from "./errors.js";
 import { parseFeatures } from "./landings.js";
 import { registerApi } from "./api.js";
-import { renderLanding, type LandingView } from "./render.js";
+import { renderLanding, renderUploaded, type LandingView } from "./render.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -28,6 +28,7 @@ export function landingView(input: {
   downloadUrl: string | null;
   features: string;
   template: { theme: string; layout: string };
+  pixelUrl?: string | null;
 }): LandingView {
   return {
     slug: input.slug,
@@ -39,7 +40,25 @@ export function landingView(input: {
     features: parseFeatures(input.features),
     theme: input.template.theme,
     layout: input.template.layout,
+    pixelUrl: input.pixelUrl,
   };
+}
+
+function sendLanding(reply: { type: (value: string) => { send: (body: string) => unknown } }, landing: {
+  slug: string;
+  name: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  downloadUrl: string | null;
+  features: string;
+  pixelUrl?: string | null;
+  template: { theme: string; layout: string; html?: string | null };
+}, track: boolean) {
+  if (landing.template.html) {
+    return reply.type("text/html; charset=utf-8").send(renderUploaded(landing.template.html, { slug: landing.slug, pixelUrl: landing.pixelUrl, track }));
+  }
+  return reply.type("text/html; charset=utf-8").send(renderLanding(landingView({ ...landing, pixelUrl: landing.pixelUrl }), track));
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -90,7 +109,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       include: { template: true },
     });
     if (!landing) return;
-    return reply.type("text/html; charset=utf-8").send(renderLanding(landingView(landing), true));
+    return sendLanding(reply, landing, true);
   });
 
   await registerApi(app);
@@ -114,13 +133,14 @@ function registerPages(app: FastifyInstance): void {
     const { slug } = request.params as { slug: string };
     const landing = await db().landing.findFirst({ where: { slug, status: "active" }, include: { template: true } });
     if (!landing) throw new AppError(404, "not_found", "Лендинг не опубликован");
-    return reply.type("text/html; charset=utf-8").send(renderLanding(landingView(landing), true));
+    return sendLanding(reply, landing, true);
   });
 
   app.get("/t/:slug", async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const template = await db().template.findFirst({ where: { slug, published: true } });
     if (!template) throw new AppError(404, "not_found", "Пример не найден");
+    if (template.html) return reply.type("text/html; charset=utf-8").send(renderUploaded(template.html, { slug: template.slug, track: false }));
     const defaults = JSON.parse(template.defaults) as { title?: string; subtitle?: string; button?: string; features?: string[] };
     const view: LandingView = {
       slug: template.slug,

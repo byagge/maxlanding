@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { db } from "./db.js";
 import { AppError } from "./errors.js";
 import { createLanding } from "./landings.js";
+import { applyReferral, listReferrals } from "./referrals.js";
 import { getSettings } from "./settings.js";
 import { statsText, userStats } from "./stats.js";
 import { upsertTelegramUser } from "./telegram.js";
@@ -10,10 +11,11 @@ import { upsertTelegramUser } from "./telegram.js";
 type Draft = { name?: string };
 
 const screens = [
-  ["🔗 Создать ленд", "create"],
+  ["🔗 Создать ссылку", "create"],
+  ["🌐 Домены", "domains"],
   ["🏷 Примеры лендингов", "examples"],
-  ["🔔 Настройки логов", "logs"],
-  ["👤 Профиль", "profile"],
+  ["🔔 Логи", "logs"],
+  ["👥 Пригласить", "invite"],
   ["🎛 Панель управления", "admin"],
   ["💬 Поддержка", "support"],
 ] as const;
@@ -21,7 +23,7 @@ const screens = [
 function menuKeyboard(): InlineKeyboard {
   const web = config.webappUrl.startsWith("https://") ? config.webappUrl.replace(/\/$/, "") : "";
   const kb = new InlineKeyboard();
-  const rows = [1, 1, 2, 1, 1];
+  const rows = [1, 1, 1, 2, 1, 1];
   let index = 0;
   for (const size of rows) {
     for (let i = 0; i < size; i += 1) {
@@ -79,6 +81,14 @@ export function createBot(): Bot {
 
   bot.command(["start", "menu"], async (ctx) => {
     const user = await actor(ctx);
+    const payload = String(ctx.match || "").trim();
+    if (payload.startsWith("ref_")) {
+      try {
+        await applyReferral(user.id, payload.slice(4));
+      } catch {
+        // Неверный код не блокирует меню.
+      }
+    }
     await writeState(user.id, "idle", {});
     await showMenu(ctx);
   });
@@ -138,7 +148,19 @@ async function openScreen(ctx: Context, userId: string, screen: string, page = 1
   const user = await db().user.findUniqueOrThrow({ where: { id: userId } });
   if (screen === "create") {
     await writeState(userId, "create_name", {});
-    await ctx.reply("Как назвать сайт?");
+    await ctx.reply("Как назвать ссылку? Дальше выберите шаблон — адрес будет уникальным для вас.");
+    return;
+  }
+  if (screen === "domains") {
+    const settings = await getSettings();
+    const links = await db().landing.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 8 });
+    const lines = links.map((item) => `${item.name}: ${item.subdomain}.${settings.platformDomain} · ${item.dnsStatus}${item.customHost ? ` · ${item.customHost}` : ""}`).join("\n") || "Ссылок пока нет.";
+    await ctx.reply(`${lines}\n\nNS: ${settings.ns1}, ${settings.ns2}\nGI-сервер: ${settings.platformIp || settings.originHost || "не задан"}\nСвой домен привязывается в мини-приложении. Cloudflare создаёт запись, если токен зоны задан в панели.`);
+    return;
+  }
+  if (screen === "invite") {
+    const data = await listReferrals(userId);
+    await ctx.reply(`Код приглашения: ${data.code}\nСсылка для бота: /start ref_${data.code}\nПриглашено: ${data.items.length}`);
     return;
   }
   if (screen === "examples") {

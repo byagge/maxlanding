@@ -18,6 +18,8 @@ model User {
   logIp       Boolean  @default(true)
   logUa       Boolean  @default(true)
   logReferrer Boolean  @default(true)
+  referralCode String? @unique
+  referredById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -65,6 +67,7 @@ model Template {
   layout      String
   previewHue  String
   defaults    String
+  html        String   @default("")
   published   Boolean  @default(true)
   inShop      Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -95,6 +98,9 @@ model Landing {
   subdomain    String?  @unique
   customHost   String?  @unique
   customStatus String?
+  pixelUrl     String   @default("")
+  dnsStatus    String   @default("pending")
+  dnsDetail    String   @default("")
   name         String
   status       String   @default("draft")
   title       String

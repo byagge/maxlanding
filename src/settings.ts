@@ -7,6 +7,9 @@ export type PlatformSettings = {
   ns2: string;
   platformDomain: string;
   platformIp: string;
+  originHost: string;
+  cloudflareZoneId: string;
+  cloudflareToken: string;
   supportContact: string;
   minTopup: number;
   cryptobotToken: string;
@@ -19,13 +22,16 @@ export type PlatformSettings = {
   tronApiKey: string;
 };
 
-const SECRET_KEYS = ["cryptobotToken", "xrocketToken", "xrocketWebhookSecret", "tonApiKey", "tronApiKey"] as const;
+const SECRET_KEYS = ["cryptobotToken", "xrocketToken", "xrocketWebhookSecret", "tonApiKey", "tronApiKey", "cloudflareToken"] as const;
 
 export const defaultSettings = (): PlatformSettings => ({
   ns1: "ns1.maxlanding.app",
   ns2: "ns2.maxlanding.app",
   platformDomain: "max.com",
   platformIp: "",
+  originHost: "",
+  cloudflareZoneId: "",
+  cloudflareToken: "",
   supportContact: "@maxlanding_support",
   minTopup: 5,
   cryptobotToken: "",
@@ -91,6 +97,9 @@ export function publicSettings(settings: PlatformSettings) {
     ns2: settings.ns2,
     platformDomain: settings.platformDomain,
     platformIp: settings.platformIp,
+    originHost: settings.originHost,
+    cloudflareZoneId: settings.cloudflareZoneId,
+    cloudflare: Boolean(settings.cloudflareToken && settings.cloudflareZoneId),
     supportContact: settings.supportContact,
     minTopup: settings.minTopup,
     publicBaseUrl: config.publicBaseUrl,
@@ -113,6 +122,7 @@ export function adminSettings(settings: PlatformSettings) {
       xrocketWebhookSecret: maskSecret(settings.xrocketWebhookSecret),
       tonApiKey: maskSecret(settings.tonApiKey),
       tronApiKey: maskSecret(settings.tronApiKey),
+      cloudflareToken: maskSecret(settings.cloudflareToken),
     },
     wallets: {
       ton: settings.tonWallet,

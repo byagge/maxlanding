@@ -10,6 +10,8 @@ const { cryptoBotSignature, decryptSecret, encryptSecret, safeEqualHex, xrocketS
 const { decodeTonComment, findTonPayment, findTrc20Transfer, trc20Expected } = await import("../src/chains.js");
 const { renderLanding } = await import("../src/render.js");
 const { hostDecision } = await import("../src/landings.js");
+const { dnsTarget } = await import("../src/cloudflare.js");
+const { assertTemplateHtml } = await import("../src/catalog.js");
 
 test("domain names and NS decisions", () => {
   assert.equal(normalizeHostname("HTTPS://Promo.Example.com/landing"), "promo.example.com");
@@ -21,6 +23,11 @@ test("domain names and NS decisions", () => {
   assert.equal(hostDecision(["203.0.113.10"], "203.0.113.10", "promo.example.com").status, "active");
   assert.equal(hostDecision([], "203.0.113.10", "promo.example.com").status, "pending");
   assert.equal(hostDecision(["1.1.1.1"], "", "promo.example.com").status, "pending");
+  assert.deepEqual(dnsTarget({ platformIp: "203.0.113.10", originHost: "origin.example.com" }), { type: "A", content: "203.0.113.10" });
+  assert.deepEqual(dnsTarget({ platformIp: "", originHost: "origin.example.com" }), { type: "CNAME", content: "origin.example.com" });
+  assert.equal(dnsTarget({ platformIp: "", originHost: "" }), null);
+  assert.throws(() => assertTemplateHtml("<input type=\"password\">"));
+  assert.doesNotThrow(() => assertTemplateHtml("<h1>Оффер</h1><a data-track=\"cta\">Дальше</a>"));
 });
 
 test("payment signatures, secrets and chain matching", () => {

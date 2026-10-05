@@ -8,7 +8,36 @@ export type LandingView = {
   features: string[];
   theme: string;
   layout: string;
+  pixelUrl?: string | null;
 };
+
+export function pixelImage(url?: string | null): string {
+  if (!url || !url.startsWith("https://")) return "";
+  return `<img src="${url.replace(/"/g, "")}" width="1" height="1" alt="" style="position:absolute;left:-9999px">`;
+}
+
+export function trackingScript(slug: string, pixelUrl?: string | null): string {
+  return `<script>
+const slug=${JSON.stringify(slug)};
+const session=(sessionStorage.getItem("ml_s")||String(Date.now()));
+sessionStorage.setItem("ml_s", session);
+const params=new URLSearchParams(location.search);
+let source=params.get("utm_source")||"";
+if(!source){try{source=document.referrer?new URL(document.referrer).host:"direct"}catch(e){source=document.referrer?"referral":"direct"}}
+const started=Date.now();
+function hit(type, extra){return fetch("/api/public/hit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.assign({slug,type,session,source}, extra||{})),keepalive:true}).catch(()=>{})}
+hit("visit");
+setInterval(()=>hit("heartbeat",{duration:Math.round((Date.now()-started)/1000)}),15000);
+document.addEventListener("click",(event)=>{const el=event.target&&event.target.closest?event.target.closest("a,button,[data-track]"):null;if(!el||el.matches("input,textarea,select"))return;hit("click",{element:el.getAttribute("data-track")||el.id||el.tagName})},true);
+document.querySelector("[data-download]")?.addEventListener("click",(event)=>{event.preventDefault();const href=event.currentTarget.getAttribute("href");hit("download").finally(()=>{if(href)location.href=href})});
+</script>${pixelImage(pixelUrl)}`;
+}
+
+export function renderUploaded(html: string, options: { slug: string; pixelUrl?: string | null; track: boolean }): string {
+  const extra = options.track ? trackingScript(options.slug, options.pixelUrl) : pixelImage(options.pixelUrl);
+  if (html.includes("</body>")) return html.replace("</body>", `${extra}</body>`);
+  return `${html}${extra}`;
+}
 
 const themes: Record<string, { bg: string; ink: string; muted: string; accent: string; card: string; glow: string; light: boolean }> = {
   aurora: { bg: "#090b14", ink: "#f6f7fb", muted: "#b7c0d8", accent: "#8b7cff", card: "rgba(255,255,255,.06)", glow: "#5b8cff", light: false },
@@ -50,14 +79,7 @@ export function renderLanding(view: LandingView, track: boolean): string {
   const button = href
     ? `<a class="cta" data-download href="${href}">${esc(view.buttonText)}</a>`
     : `<span class="cta is-disabled">${esc(view.buttonText)}</span>`;
-  const script = track
-    ? `<script>
-const slug=${JSON.stringify(view.slug)};
-function hit(type){return fetch("/api/public/hit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug,type}),keepalive:true}).catch(()=>{})}
-hit("visit");
-document.querySelector("[data-download]")?.addEventListener("click",(event)=>{event.preventDefault();const href=event.currentTarget.getAttribute("href");hit("download").finally(()=>{if(href)location.href=href})});
-</script>`
-    : "";
+  const script = track ? trackingScript(view.slug, view.pixelUrl) : pixelImage(view.pixelUrl);
   return `<!doctype html>
 <html lang="ru">
 <meta charset="utf-8">

@@ -2,6 +2,7 @@ import type { Landing, Template, User } from "@prisma/client";
 import { db } from "./db.js";
 import { AppError } from "./errors.js";
 import { randomSlug } from "./crypto.js";
+import { upsertCloudflareRecord } from "./cloudflare.js";
 import { lookupDomain, normalizeHostname } from "./dns.js";
 import { recordEvent } from "./stats.js";
 import { getSettings, type PlatformSettings } from "./settings.js";
@@ -18,8 +19,21 @@ export type LandingInput = {
   buttonText?: string;
   downloadUrl?: string | null;
   features?: string[];
+  pixelUrl?: string | null;
   launch?: boolean;
 };
+
+export function cleanPixel(value: string | null | undefined): string {
+  if (!value || !value.trim()) return "";
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new AppError(400, "bad_pixel", "Пиксель должен быть https-ссылкой");
+  }
+  if (url.protocol !== "https:") throw new AppError(400, "bad_pixel", "Пиксель должен быть https-ссылкой");
+  return url.toString().slice(0, 500);
+}
 
 export function parseFeatures(raw: string): string[] {
   try {
@@ -70,9 +84,22 @@ export function scheduleReady(id: string): void {
   const timer = setTimeout(() => {
     db()
       .landing.updateMany({ where: { id, status: "preparing" }, data: { status: "active" } })
+      .then(() => attachPlatformDns(id))
       .catch((error) => console.error("prepare", error));
   }, PREPARE_MS);
   timer.unref();
+}
+
+export async function attachPlatformDns(id: string): Promise<void> {
+  const landing = await db().landing.findUnique({ where: { id } });
+  if (!landing?.subdomain) return;
+  const settings = await getSettings();
+  const host = `${landing.subdomain}.${settings.platformDomain}`;
+  const result = await upsertCloudflareRecord(settings, host);
+  await db().landing.update({
+    where: { id },
+    data: { dnsStatus: result.ok ? "active" : "manual", dnsDetail: result.detail.slice(0, 400) },
+  });
 }
 
 export async function resumePreparing(): Promise<void> {
@@ -129,6 +156,7 @@ export async function createLanding(user: User, input: LandingInput) {
       subtitle: (input.subtitle || defaults.subtitle).trim().slice(0, 180),
       buttonText: (input.buttonText || defaults.button).trim().slice(0, 32),
       downloadUrl: cleanDownloadUrl(input.downloadUrl),
+      pixelUrl: cleanPixel(input.pixelUrl),
       features: JSON.stringify(cleanFeatures(input.features, defaults.features)),
     },
     include: landingInclude,
@@ -161,6 +189,7 @@ export async function updateLanding(userId: string, landingId: string, input: Pa
       subtitle: input.subtitle?.trim().slice(0, 180) || undefined,
       buttonText: input.buttonText?.trim().slice(0, 32) || undefined,
       downloadUrl: input.downloadUrl === undefined ? undefined : cleanDownloadUrl(input.downloadUrl),
+      pixelUrl: input.pixelUrl === undefined ? undefined : cleanPixel(input.pixelUrl),
       features: input.features ? JSON.stringify(cleanFeatures(input.features, [])) : undefined,
     },
     include: landingInclude,
@@ -219,12 +248,14 @@ export async function connectCustomHost(userId: string, landingId: string, hostn
   }
   const lookup = await lookupDomain(host);
   const decision = hostDecision(lookup.a, settings.platformIp, host);
+  const dns = await upsertCloudflareRecord(settings, host);
   const updated = await db().landing.update({
     where: { id: landing.id },
     data: { customHost: host, customStatus: decision.status },
     include: landingInclude,
   });
-  return { landing: await decorateLanding(updated), message: decision.message };
+  const message = dns.ok ? `${decision.message} ${dns.detail}` : `${decision.message} ${dns.detail}`;
+  return { landing: await decorateLanding(updated), message };
 }
 
 export function presentLanding(landing: Landing & { template?: Template; domain?: { hostname: string; status: string } | null }) {
@@ -240,8 +271,8 @@ export function addressFor(settings: PlatformSettings, landing: { subdomain?: st
     platformDomain: domain,
     platformIp: settings.platformIp,
     instruction: settings.platformIp
-      ? `Чтобы открыть лендинг на своём домене, создайте A-запись и направьте её на ${settings.platformIp}.`
-      : "IP платформы ещё не задан в панели. После этого A-запись вашего домена нужно направить на этот IP.",
+      ? `Свой домен: A-запись на GI-сервер ${settings.platformIp}, либо NS ${settings.ns1} и ${settings.ns2}. Если в панели задан Cloudflare, запись создаётся через API.`
+      : `Свой домен подключается A-записью на GI-сервер или NS ${settings.ns1} и ${settings.ns2}. IP ещё не задан в панели.`,
   };
 }
 
@@ -261,14 +292,29 @@ export function assertTheme(theme: string, layout: string): void {
   }
 }
 
-export async function trackPublicHit(slug: string, type: "visit" | "download", request: { ip?: string; userAgent?: string; referrer?: string }) {
+export async function trackPublicHit(slug: string, type: "visit" | "download" | "heartbeat" | "click" | "pixel", request: {
+  ip?: string;
+  userAgent?: string;
+  referrer?: string;
+  session?: string;
+  source?: string;
+  duration?: number;
+  element?: string;
+}) {
   const landing = await db().landing.findFirst({ where: { slug, status: "active" }, include: { user: true } });
   if (!landing) throw new AppError(404, "not_found", "Лендинг не опубликован");
   if (type === "download" && !landing.downloadUrl) throw new AppError(400, "no_file", "У лендинга нет ссылки на файл");
+  const source = (request.source || "").slice(0, 80) || (request.referrer ? "referral" : "direct");
   await recordEvent({
     landingId: landing.id,
     userId: landing.userId,
     type,
+    meta: {
+      session: request.session?.slice(0, 40) || "",
+      source,
+      duration: request.duration ?? null,
+      element: request.element?.slice(0, 80) || "",
+    },
     ip: request.ip,
     userAgent: request.userAgent,
     referrer: request.referrer,

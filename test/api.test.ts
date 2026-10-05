@@ -184,6 +184,76 @@ test("shop purchase needs balance, on-chain invoice and admin confirm", async ()
   const refreshed = await db().user.findUniqueOrThrow({ where: { id: user.id } });
   assert.equal(refreshed.balance, 28);
 });
+
+test("analytics, referrals and template guard ignore form contents", async () => {
+  const admin = await login("admin");
+  const headers = { authorization: `Bearer ${admin}` };
+  const landing = await app.inject({
+    method: "POST",
+    url: "/api/landings",
+    headers,
+    payload: { name: "Поток", templateId: await templateId(admin, "pulse-saas"), launch: true },
+  });
+  assert.equal(landing.statusCode, 200);
+  const created = landing.json().landing;
+  const slug = created.slug as string;
+  const dns = await app.inject({ method: "POST", url: `/api/landings/${created.id}/dns`, headers, payload: {} });
+  assert.equal(dns.statusCode, 200);
+  assert.equal(dns.json().landing.dnsStatus, "manual");
+  assert.match(dns.json().landing.dnsDetail, /Cloudflare/);
+
+  let ready = created;
+  for (let attempt = 0; attempt < 40 && ready.status !== "active"; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    ready = (await app.inject({ method: "GET", url: `/api/landings/${created.id}`, headers })).json().landing;
+  }
+  assert.equal(ready.status, "active");
+
+  assert.equal((await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug, type: "visit", source: "direct", session: "s1" } })).statusCode, 200);
+  assert.equal((await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug, type: "click", element: "cta", source: "direct", session: "s1" } })).statusCode, 200);
+  assert.equal((await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug, type: "heartbeat", duration: 15, session: "s1", source: "direct" } })).statusCode, 200);
+  const leaked = await app.inject({ method: "POST", url: "/api/public/hit", payload: { slug, type: "visit", value: "79990001122" } });
+  assert.equal(leaked.statusCode, 400);
+
+  const dashboard = await app.inject({ method: "GET", url: "/api/dashboard", headers });
+  assert.equal(dashboard.json().stats.clicks >= 1, true);
+  assert.equal(dashboard.json().stats.direct >= 1, true);
+  assert.equal(dashboard.json().stats.avgSeconds >= 15, true);
+
+  const rejected = await app.inject({
+    method: "POST",
+    url: "/api/admin/templates",
+    headers,
+    payload: {
+      slug: "blocked-login",
+      name: "Блок",
+      description: "Нельзя",
+      category: "Тест",
+      price: 0,
+      theme: "aurora",
+      layout: "app",
+      previewHue: "#ccc",
+      defaults: { title: "Нет", subtitle: "Нет", button: "Нет", features: ["Нет"] },
+      html: "<form><input type=\"password\"></form>",
+      published: true,
+      inShop: false,
+    },
+  });
+  assert.equal(rejected.statusCode, 400);
+
+  const invite = await app.inject({ method: "GET", url: "/api/referrals", headers });
+  assert.equal(invite.statusCode, 200);
+  const userToken = await login("user");
+  const joined = await app.inject({
+    method: "POST",
+    url: "/api/referrals/apply",
+    headers: { authorization: `Bearer ${userToken}` },
+    payload: { code: invite.json().code },
+  });
+  assert.equal(joined.statusCode, 200);
+  const again = await app.inject({ method: "GET", url: "/api/referrals", headers });
+  assert.equal(again.json().items.some((item: { telegramId: string }) => item.telegramId === "20000"), true);
+});
 });
 
 async function templateId(token: string, slug: string) {
