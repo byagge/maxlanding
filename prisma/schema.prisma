@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  telegramId  String   @unique
+  username    String?
+  firstName   String?
+  lastName    String?
+  role        String   @default("user")
+  balance     Float    @default(0)
+  logIp       Boolean  @default(true)
+  logUa       Boolean  @default(true)
+  logReferrer Boolean  @default(true)
+  referralCode String? @unique
+  referredById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  domains   Domain[]
+  landings  Landing[]
+  purchases Purchase[]
+  payments  Payment[]
+  ledger    LedgerEntry[]
+  tickets   SupportTicket[]
+  botState  BotState?
+}
+
+model BotState {
+  userId    String   @id
+  step      String   @default("idle")
+  data      String   @default("{}")
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Domain {
+  id          String    @id @default(cuid())
+  userId      String
+  hostname    String    @unique
+  status      String    @default("pending_ns")
+  ns1         String
+  ns2         String
+  lastCheckAt DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  landings    Landing[]
+
+  @@index([userId])
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String
+  category    String
+  price       Float    @default(0)
+  theme       String
+  layout      String
+  previewHue  String
+  defaults    String
+  html        String   @default("")
+  published   Boolean  @default(true)
+  inShop      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  landings  Landing[]
+  purchases Purchase[]
+}
+
+model Purchase {
+  id         String   @id @default(cuid())
+  userId     String
+  templateId String
+  price      Float
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, templateId])
+}
+
+model Landing {
+  id          String   @id @default(cuid())
+  userId      String
+  templateId  String
+  domainId    String?
+  slug         String   @unique
+  subdomain    String?  @unique
+  customHost   String?  @unique
+  customStatus String?
+  pixelUrl     String   @default("")
+  dnsStatus    String   @default("pending")
+  dnsDetail    String   @default("")
+  name         String
+  status       String   @default("draft")
+  title       String
+  subtitle    String
+  buttonText  String
+  downloadUrl String?
+  features    String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template Template @relation(fields: [templateId], references: [id])
+  domain   Domain?  @relation(fields: [domainId], references: [id])
+  events   Event[]
+
+  @@index([userId])
+  @@index([domainId])
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  landingId  String?
+  userId     String?
+  type       String
+  meta       String   @default("{}")
+  ipHash     String?
+  userAgent  String?
+  referrer   String?
+  createdAt  DateTime @default(now())
+  landing    Landing? @relation(fields: [landingId], references: [id], onDelete: Cascade)
+
+  @@index([landingId, type])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model Payment {
+  id         String    @id @default(cuid())
+  userId     String
+  provider   String
+  amount     Float
+  currency   String    @default("USDT")
+  asset      String    @default("USDT")
+  status     String    @default("pending")
+  externalId String?
+  payUrl     String?
+  address    String?
+  memo       String?
+  txHash     String?
+  meta       String    @default("{}")
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  paidAt     DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model LedgerEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Float
+  reason    String
+  ref       String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  userId    String
+  message   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
